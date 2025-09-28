@@ -4,3 +4,4 @@ project_description.txt
 .aider*
 data/*.txt
 *.exe
+*.o
