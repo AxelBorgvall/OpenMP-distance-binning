@@ -5,8 +5,8 @@
 
 #define LINE_LEN 24
 
-int parse_block(FILE *file, long starting_offset, Point *block, int max_size,
-                long *end_offset) {
+int parse_block(FILE *file, uint64_t starting_offset, Point *block, int max_size,
+                uint64_t *end_offset) {
 
   /*
   starting offset is from where it reads. Always resets filepointer to start.
@@ -14,7 +14,7 @@ int parse_block(FILE *file, long starting_offset, Point *block, int max_size,
   */
 
   // set position in file
-  if (fseek(file, starting_offset, SEEK_SET) != 0) {
+  if (fseek(file, (long)starting_offset, SEEK_SET) != 0) {
     // Error seeking; could add errno check, but assume file is seekable
     *end_offset = starting_offset;
     return 0;
