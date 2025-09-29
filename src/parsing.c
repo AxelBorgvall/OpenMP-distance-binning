@@ -1,12 +1,28 @@
+
 #include "../include/parsing.h"
 #include <stdio.h>
 #include <string.h> // For potential line length checks, though format is fixed
 
 #define LINE_LEN 24
 
-int parse_block(FILE *file, Point *block, int max_size) {
+int parse_block(FILE *file, long starting_offset, Point *block, int max_size,
+                long *end_offset) {
+
+  /*
+  starting offset is from where it reads. Always resets filepointer to start.
+  end offset is where the pointer is at read end.
+  */
+
+  // set position in file
+  if (fseek(file, starting_offset, SEEK_SET) != 0) {
+    // Error seeking; could add errno check, but assume file is seekable
+    *end_offset = starting_offset;
+    return 0;
+  }
+
   int count = 0;
-  char line[LINE_LEN + 1]; // +1 for null terminator
+  char line[LINE_LEN + 1];       // +1 for null terminator
+  *end_offset = starting_offset; // Default if no progress
 
   while (count < max_size && fgets(line, sizeof(line), file) != NULL) {
     // Assume fixed format; skip if line is too short (though input is valid)
@@ -15,7 +31,6 @@ int parse_block(FILE *file, Point *block, int max_size) {
     }
 
     // Parse x coordinate: positions 0-6: [sign][d][d].[d][d][d]
-
     int sign_x = (line[0] == '+') ? 1 : -1;
     int int_part_x = (line[1] - '0') * 10 + (line[2] - '0');
     int dec_part_x =
@@ -37,6 +52,8 @@ int parse_block(FILE *file, Point *block, int max_size) {
     block[count].z = sign_z * (int_part_z * SCALE + dec_part_z);
 
     count++;
+    *end_offset = ftell(file); // Update after successful parse
   }
+
   return count;
 }
