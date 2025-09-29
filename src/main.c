@@ -46,16 +46,53 @@ int main(int argc, char *argv[]) {
 
   omp_set_num_threads(threads);
 
+  printf("number of threads = %d\nblocksize = %d\nfilepath=%s", threads,
+         blocksize, fpath);
+
+  // Set OpenMP threads
+  omp_set_num_threads(threads);
+
   // Open the input file
-
   FILE *file = fopen(fpath, "r");
-
   if (!file) {
     fprintf(stderr, "Error: Could not open file '%s'\n", fpath);
     return 1;
   }
-  printf("number of threads = %d\n blocksize = %d\n filepath=%s", threads,
-         blocksize, fpath);
+
+  // Compute total number of points using file size (fixed line length)
+  if (fseek(file, 0, SEEK_END) != 0) {
+    fprintf(stderr, "Error seeking to end of file\n");
+    fclose(file);
+    return 1;
+  }
+
+  long total_bytes = ftell(file);
+  if (total_bytes % LINE_LEN != 0) {
+    fprintf(stderr, "Warning: File size not multiple of line length; assuming "
+                    "valid input\n");
+  }
+
+  long total_points_long = total_bytes / LINE_LEN;
+  if (total_points_long > INT_MAX) {
+    fprintf(stderr, "Error: Too many points (exceeds int)\n");
+    fclose(file);
+    return 1;
+  }
+
+  int total_points = (int)total_points_long;
+
+  // Compute number of blocks
+  int num_blocks = (total_points + blocksize - 1) / blocksize;
+
+  // Allocate reusable blocks (two for A and B; check memory roughly)
+  size_t block_mem = (size_t)blocksize * sizeof(Point);
+  if (block_mem > 2 * 1024 * 1024 * 2) { // Rough check: <4 MiB for two blocks
+    fprintf(stderr, "Error: Blocksize too large for memory limit\n");
+    fclose(file);
+    return 1;
+  }
+
+  printf("Number of lines=%d\nNumber of blocks=%d", total_points, num_blocks);
 
   // Define blocks
 
