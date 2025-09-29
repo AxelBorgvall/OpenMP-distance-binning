@@ -43,14 +43,10 @@ int main(int argc, char *argv[]) {
   }
 
   // Set OpenMP threads
-
   omp_set_num_threads(threads);
 
   printf("number of threads = %d\nblocksize = %d\nfilepath=%s", threads,
          blocksize, fpath);
-
-  // Set OpenMP threads
-  omp_set_num_threads(threads);
 
   // Open the input file
   FILE *file = fopen(fpath, "r");
@@ -59,27 +55,24 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Compute total number of points using file size (fixed line length)
-  if (fseek(file, 0, SEEK_END) != 0) {
-    fprintf(stderr, "Error seeking to end of file\n");
-    fclose(file);
-    return 1;
+  // Count total number of points by reading lines
+  int total_points = 0;
+  char line[LINE_LEN + 1];
+  while (fgets(line, sizeof(line), file) != NULL) {
+    if (strlen(line) < LINE_LEN) {
+      continue;
+    }
+    total_points++;
   }
 
-  long total_bytes = ftell(file);
-  if (total_bytes % LINE_LEN != 0) {
-    fprintf(stderr, "Warning: File size not multiple of line length; assuming "
-                    "valid input\n");
-  }
+  // Rewind to beginning for processing
+  rewind(file);
 
-  long total_points_long = total_bytes / LINE_LEN;
-  if (total_points_long > INT_MAX) {
+  if (total_points > INT_MAX) {
     fprintf(stderr, "Error: Too many points (exceeds int)\n");
     fclose(file);
     return 1;
   }
-
-  int total_points = (int)total_points_long;
 
   // Compute number of blocks
   int num_blocks = (total_points + blocksize - 1) / blocksize;
