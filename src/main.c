@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,7 +15,7 @@ int main(int argc, char *argv[]) {
 
   int threads = 1;
   int blocksize = DEFAULT_BLOCKSIZE;
-  char *fpath = "cells";
+  char *fpath = "./cells";
 
   // Parse command-line arguments
   for (int i = 1; i < argc; i++) {
@@ -34,6 +35,7 @@ int main(int argc, char *argv[]) {
 
     } else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
       fpath = argv[i + 1];
+
       i++;
 
     } else {
@@ -56,7 +58,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Count total number of points by reading lines
-  int total_points = 0;
+  uint64_t total_points = 0;
   char line[LINE_LEN + 1];
   while (fgets(line, sizeof(line), file) != NULL) {
     if (strlen(line) < LINE_LEN) {
@@ -68,8 +70,8 @@ int main(int argc, char *argv[]) {
   // Rewind to beginning for processing
   rewind(file);
 
-  if (total_points > INT_MAX) {
-    fprintf(stderr, "Error: Too many points (exceeds int)\n");
+  if (total_points > 4294967296ULL) {
+    fprintf(stderr, "Error: Too many points (exceeds uint64_t)\n");
     fclose(file);
     return 1;
   }
@@ -85,11 +87,75 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  printf("Number of lines=%d\nNumber of blocks=%d", total_points, num_blocks);
+  printf("Number of lines=%" PRIu64 "\nNumber of blocks=%d\n", total_points,
+         num_blocks);
 
   // Define blocks
+  Point *block_a = malloc(block_mem);
 
-  // Loop over file
+  Point *block_b = malloc(block_mem);
+
+  if (!block_a || !block_b) {
+    fprintf(stderr, "Error: Failed to allocate blocks\n");
+    free(block_a);
+    free(block_b);
+    fclose(file);
+    return 1;
+  }
+
+  // Initialise counts array
+  int64_t counts[MAX_BIN];
+  memset(counts, 0, sizeof(counts));
+
+  // Block iteration: nested loops over blocks A <= B
+  uint64_t dummy_end;
+  for (int ba = 0; ba < num_blocks; ba++) { // loop over block a
+
+    int size_a = (ba + 1) * blocksize > total_points
+                     ? total_points - ba * blocksize
+                     : blocksize;
+    uint64_t offset_a = (uint64_t)ba * blocksize * LINE_LEN;
+    int parsed_a = parse_block(file, offset_a, block_a, size_a, &dummy_end);
+    if (parsed_a != size_a) {
+      fprintf(stderr,
+              "Warning: Parsed fewer points than expected for block %d\n", ba);
+    }
+
+    for (int bb = ba; bb < num_blocks; bb++) { // loop over block b
+      if (ba == bb) {
+        // A == B: just compare block_a with itself
+        compute_block_pairs(block_a, size_a, block_a, size_a, counts);
+        continue;
+      }
+      printf("\rA:%d, B:%d", ba, bb);
+      int size_b = (bb + 1) * blocksize > total_points
+                       ? total_points - bb * blocksize
+                       : blocksize;
+      uint64_t offset_b = (uint64_t)bb * blocksize * LINE_LEN;
+      int parsed_b = parse_block(file, offset_b, block_b, size_b, &dummy_end);
+      if (parsed_b != size_b) {
+        fprintf(stderr,
+                "Warning: Parsed fewer points than expected for block %d\n",
+                bb);
+      }
+
+      compute_block_pairs(block_a, size_a, block_b, size_b, counts);
+    }
+  }
+  printf("\n");
+  // Output sorted non-zero frequencies
+  for (int bin = 0; bin < MAX_BIN; bin++) {
+    if (counts[bin] > 0) {
+      int whole = bin / 100;
+      int frac = bin % 100;
+      printf("%02d.%02d %lld\n", whole, frac, counts[bin]);
+    }
+  }
+
+  // Cleanup
+  free(block_a);
+  free(block_b);
+  fclose(file);
 
   return 0;
 }

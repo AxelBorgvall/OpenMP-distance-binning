@@ -31,18 +31,22 @@ void compute_block_pairs(const Point *block_a, int size_a,
                          const Point *block_b, int size_b,
 
                          int64_t *counts) {
-
-  int start_j = (block_a == block_b) ? 1 : 0; // For same block, i < j
-
+  if (block_a == block_b) {
 #pragma omp parallel for collapse(2) reduction(+ : counts[ : MAX_BIN])
-  for (int i = 0; i < size_a; ++i) {
-    for (int j = 0; j < size_b; ++j) {
-      if (block_a == block_b && j <= i - start_j)
-        continue;
-
-      int bin = get_binned_distance(&block_a[i], &block_b[j]);
-      if (bin != -1) {
-        counts[bin]++;
+    for (int i = 0; i < size_a; ++i) {
+      for (int j = i + 1; j < size_b; ++j) {
+        int bin = get_binned_distance(&block_a[i], &block_b[j]);
+        if (bin != -1)
+          counts[bin]++;
+      }
+    }
+  } else {
+#pragma omp parallel for collapse(2) reduction(+ : counts[ : MAX_BIN])
+    for (int i = 0; i < size_a; ++i) {
+      for (int j = 0; j < size_b; ++j) {
+        int bin = get_binned_distance(&block_a[i], &block_b[j]);
+        if (bin != -1)
+          counts[bin]++;
       }
     }
   }
